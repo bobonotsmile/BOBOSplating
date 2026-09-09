@@ -10,7 +10,7 @@
 
 ## 演示视频
 
-[观看 BOBOSplating 平台演示（MP4）](docs/assets/BOBOSplating平台演示-GitHub.mp4)
+https://github.com/user-attachments/assets/f7330e46-b731-43c3-99b9-c18e0cd57c85
 
 ## 可以做什么
 
