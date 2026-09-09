@@ -64,3 +64,7 @@
 *.suo
 .DS_Store
 Thumbs.db
+
+# Local development notes
+/docs/后端流程与代码状态.md
+/docs/本地测开说明.md
