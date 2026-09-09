@@ -10,7 +10,7 @@ Reconstruction runs on the host machine; the browser provides controls and 3D pr
 
 ## Demo video
 
-![BOBOSplating platform demo](docs/assets/BOBOSplating平台演示.mp4)
+[Watch the BOBOSplating platform demo (MP4)](docs/assets/BOBOSplating平台演示-GitHub.mp4)
 
 ## Features
 
