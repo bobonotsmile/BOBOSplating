@@ -8,6 +8,10 @@ Turn a video into a 3D scene you can explore. Deploy BOBOSplating on your own co
 
 Reconstruction runs on the host machine; the browser provides controls and 3D previews. Source media, job records, and training results stay on your own host, making it suited to personal and trusted internal workspaces.
 
+## Demo video
+
+![BOBOSplating platform demo](docs/assets/BOBOSplating平台演示.mp4)
+
 ## Features
 
 - **Video to 3D scene**: upload MP4, MOV, MKV, or WebM files for automatic frame extraction, camera reconstruction, and Gaussian training.
