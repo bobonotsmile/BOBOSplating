@@ -1,0 +1,2 @@
+# Linux entrypoints and installation scripts must remain LF on Windows checkouts.
+*.sh text eol=lf

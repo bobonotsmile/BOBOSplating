@@ -1,0 +1,84 @@
+name: ${COMPOSE_PROJECT_NAME:?Set COMPOSE_PROJECT_NAME}
+services:
+  splat-backend:
+    runtime: nvidia
+    image: ${BOBO_BACKEND_IMAGE:?Set BOBO_BACKEND_IMAGE}
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: dev-config/Dockerfile.splat-backend
+      args:
+        SDK_IMAGE: ${SDK_IMAGE}
+        DOTNET_IMAGE: ${DOTNET_IMAGE}
+        UBUNTU_IMAGE: ${UBUNTU_IMAGE}
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 45s
+    user: "${BOBO_UID}:${BOBO_GID}"
+    environment:
+      ASPNETCORE_URLS: http://0.0.0.0:${BOBO_API_PORT}
+      Bobo__DataRoot: /data
+      Bobo__MaxUploadBytes: ${BOBO_MAX_UPLOAD_BYTES}
+      Bobo__MaxPendingJobs: ${BOBO_MAX_PENDING_JOBS}
+      Bobo__ProcessTimeoutMinutes: ${BOBO_PROCESS_TIMEOUT_MINUTES}
+      Bobo__MinRegistrationRatio: ${BOBO_MIN_REGISTRATION_RATIO}
+      Bobo__Tools__Ffmpeg: /usr/bin/ffmpeg
+      Bobo__Tools__Ffprobe: /usr/bin/ffprobe
+      Bobo__Tools__Colmap: /usr/bin/colmap
+      Bobo__Tools__Brush: /opt/brush/brush_app
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics
+    volumes:
+      - type: bind
+        source: ./data
+        target: /data
+        bind:
+          create_host_path: false
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${BOBO_GPU_ID}"]
+              capabilities: [gpu]
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS http://127.0.0.1:${BOBO_API_PORT}/api/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+  web-frontend:
+    image: ${BOBO_FRONTEND_IMAGE:?Set BOBO_FRONTEND_IMAGE}
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: dev-config/Dockerfile.web-frontend
+      args:
+        NGINX_IMAGE: ${NGINX_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      splat-backend:
+        condition: service_healthy
+    ports:
+      - "${BOBO_BIND_IP}:${BOBO_HTTPS_PORT}:443"
+    environment:
+      BOBO_API_PORT: ${BOBO_API_PORT}
+      BOBO_REQUEST_MAX_BYTES: ${BOBO_REQUEST_MAX_BYTES}
+      NGINX_ENVSUBST_FILTER: ^BOBO_
+    volumes:
+      - type: bind
+        source: ./dev-config/certs
+        target: /etc/nginx/certs
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: [CMD-SHELL, "wget --no-check-certificate -q -O /dev/null https://127.0.0.1/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}

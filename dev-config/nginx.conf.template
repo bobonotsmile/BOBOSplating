@@ -1,0 +1,28 @@
+server {
+    listen 443 ssl;
+    server_name _;
+    ssl_certificate /etc/nginx/certs/server.crt;
+    ssl_certificate_key /etc/nginx/certs/server.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size ${BOBO_REQUEST_MAX_BYTES};
+    client_body_timeout 300s;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location /api/ {
+        proxy_pass http://splat-backend:${BOBO_API_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_request_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

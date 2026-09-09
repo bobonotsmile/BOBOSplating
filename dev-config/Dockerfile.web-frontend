@@ -1,0 +1,4 @@
+ARG NGINX_IMAGE=nginx:1.27-alpine
+FROM ${NGINX_IMAGE}
+COPY web-frontend/dist/ /usr/share/nginx/html/
+COPY dev-config/nginx.conf.template /etc/nginx/templates/default.conf.template
