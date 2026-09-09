@@ -30,7 +30,9 @@ Run-Checked 'docker' @('compose', 'config', '-q')
 Run-Checked 'docker' @('compose', 'build', 'splat-backend', 'web-frontend')
 
 $finalRoot = Join-Path $PSScriptRoot 'publish/publish-linux-ubuntu'
-$stageParent = Join-Path $PSScriptRoot ('publish/.staging-' + [guid]::NewGuid().ToString('N'))
+$archiveRoot = Join-Path $PSScriptRoot 'publish/归档'
+New-Item -ItemType Directory -Path $archiveRoot -Force | Out-Null
+$stageParent = Join-Path $archiveRoot ('.staging-' + [guid]::NewGuid().ToString('N'))
 $releaseRoot = Join-Path $stageParent 'bobosplating'
 foreach ($folder in @('publish-config/nvidia-toolkit', 'images')) {
     New-Item -ItemType Directory -Path (Join-Path $releaseRoot $folder) -Force | Out-Null
@@ -310,11 +312,35 @@ if ((Get-Item $archiveTemporary).Length -ge 2GB) { throw 'GitHub Release asset m
 $archiveFinal = Join-Path $PSScriptRoot "publish/$archiveName"
 Move-Item -LiteralPath $archiveTemporary -Destination $archiveFinal -Force
 [IO.File]::WriteAllText("$archiveFinal.sha256", ((Get-FileHash $archiveFinal -Algorithm SHA256).Hash.ToLowerInvariant() + "  $archiveName`n"), $utf8)
-# The verified archive is the release artifact. Refresh the local expanded copy
-# without deleting old IDE-owned build contexts or modifying instance state.
+# Keep the expanded copy free of obsolete build contexts. Preserve legacy files
+# in the local archive directory; never archive an active deployment's state.
 if (Test-Path -LiteralPath $finalRoot) {
     if ((Test-Path (Join-Path $finalRoot 'data')) -or (Test-Path (Join-Path $finalRoot 'publish-config/certs'))) { throw 'Existing package contains instance state; archive is ready but directory replacement refused' }
     if ((Get-FileHash (Join-Path $finalRoot '.env')).Hash -ne (Get-FileHash (Join-Path $finalRoot '.env.example')).Hash) { throw 'Existing .env was customized; archive ready, directory preserved' }
+    $extraFiles = @(Get-ChildItem -LiteralPath $finalRoot -Recurse -File -Force | Where-Object {
+        -not (Test-Path -LiteralPath (Join-Path $releaseRoot $_.FullName.Substring($finalRoot.Length + 1)))
+    })
+    if ($extraFiles.Count -gt 0) {
+        $resolvedFinal = (Resolve-Path -LiteralPath $finalRoot).Path
+        $resolvedArchive = (Resolve-Path -LiteralPath $archiveRoot).Path
+        if ((Split-Path $resolvedFinal) -ne (Join-Path $PSScriptRoot 'publish') -or (Split-Path $resolvedFinal -Leaf) -ne 'publish-linux-ubuntu' -or (Split-Path $resolvedArchive) -ne (Join-Path $PSScriptRoot 'publish')) { throw 'Unexpected release archive path' }
+        $legacyRoot = Join-Path $resolvedArchive ('legacy-expanded-' + [guid]::NewGuid().ToString('N'))
+        if (Get-ChildItem -LiteralPath $resolvedFinal -Recurse -Force -Attributes ReparsePoint) { throw 'Cannot archive a release directory containing reparse points' }
+        # An IDE may hold the root directory open. Move only obsolete files,
+        # preserving their relative paths, then remove empty obsolete folders.
+        foreach ($item in $extraFiles) {
+            $relative = $item.FullName.Substring($resolvedFinal.Length + 1)
+            $target = Join-Path $legacyRoot $relative
+            if (-not ([IO.Path]::GetFullPath($target).StartsWith($legacyRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase))) { throw 'Unexpected legacy file path' }
+            New-Item -ItemType Directory -Path (Split-Path $target) -Force | Out-Null
+            Move-Item -LiteralPath $item.FullName -Destination $target
+        }
+        foreach ($folder in Get-ChildItem -LiteralPath $resolvedFinal -Recurse -Directory -Force | Sort-Object { $_.FullName.Length } -Descending) {
+            if (@(Get-ChildItem -LiteralPath $folder.FullName -Force).Count -eq 0) {
+                Remove-Item -LiteralPath $folder.FullName -Force
+            }
+        }
+    }
 }
 New-Item -ItemType Directory -Path $finalRoot -Force | Out-Null
 foreach ($item in Get-ChildItem -LiteralPath $releaseRoot -Recurse -File -Force) {
@@ -323,7 +349,7 @@ foreach ($item in Get-ChildItem -LiteralPath $releaseRoot -Recurse -File -Force)
     Copy-Item -LiteralPath $item.FullName -Destination $target -Force
 }
 $resolvedStage = (Resolve-Path -LiteralPath $stageParent).Path
-if ((Split-Path $resolvedStage) -ne (Join-Path $PSScriptRoot 'publish') -or (Split-Path $resolvedStage -Leaf) -notmatch '^\.staging-[a-f0-9]{32}$') { throw 'Unexpected staging directory' }
+if ((Split-Path $resolvedStage) -ne (Resolve-Path -LiteralPath $archiveRoot).Path -or (Split-Path $resolvedStage -Leaf) -notmatch '^\.staging-[a-f0-9]{32}$') { throw 'Unexpected staging directory' }
 Remove-Item -LiteralPath $resolvedStage -Recurse -Force
 Write-Host "Prepared installation archive: $archiveFinal"
 Write-Host 'Target GPU, installation and release documentation verification remain required before declaring delivery.'
